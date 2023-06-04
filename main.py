@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+import os
 
 
 def retrieve_info_from_mlb_dot_com():
@@ -76,6 +77,15 @@ def get_current_win_streaks(teams_dict):
     return current_win_streaks
 
 
+def get_current_two_win_streaks(teams_dict):
+    current_two_win_streaks = {}
+    for team, win_streak in teams_dict.items():
+        if win_streak == 'W2':
+            current_two_win_streaks[team] = win_streak
+
+    return current_two_win_streaks
+
+
 def write_to_file(teams_dict):
     with open('win_streaks.txt', 'w') as file:
         for team, win_streak in teams_dict.items():
@@ -130,6 +140,88 @@ def get_times_won_and_lost_from_file():
     return [old_times_won, old_times_lost]
 
 
+def get_historical_data(year, strk):
+    team_tickers = ['ATL', 'MIA', 'NYM', 'PHI', 'WSN', 'MIL', 'PIT', 'CIN', 'CHC', 'STL', 'LAD', 'ARI', 'SFG', 'SDP',
+                    'COL', 'TBR', 'BAL', 'NYY', 'TOR', 'BOS', 'MIN', 'DET', 'CLE', 'CHW', 'KCR', 'TEX', 'HOU', 'LAA',
+                    'SEA', 'OAK']
+    year_total = 0
+    year_pct = 0
+    year_lost_on_streak_total = 0
+
+    driver = webdriver.Chrome(ChromeDriverManager().install())
+
+    options = webdriver.ChromeOptions()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+
+    for ticker in team_tickers:
+        times_lost_on_win_streak = 0
+        times_won_on_win_streak = 0
+        total = 0
+        pct = 0
+
+        url = f'https://www.baseball-reference.com/teams/{ticker}/{year}-schedule-scores.shtml'
+        driver.get(url)
+        soup = BeautifulSoup(driver.page_source, "lxml")
+
+        team_dict = {}
+
+        team_name = ""
+        team_info = soup.find('h1')
+        span_tags = team_info.find_all('span')
+        for span in span_tags:
+            team_name += span.get_text()
+            team_name += " "
+
+        team_dict["Team Name and Year"] = team_name
+        team_dict["Win streaks"] = []
+
+        tds = soup.find_all('td', {'data-stat': 'win_loss_streak'})
+        for td in tds:
+            csk_value = td.get('csk')
+            team_dict["Win streaks"].append(csk_value)
+            print(csk_value)
+
+        for i in range(len(team_dict["Win streaks"]) - 1):
+
+            if team_dict["Win streaks"][i] == strk and team_dict["Win streaks"][i+1] == "-1":
+                year_total += 1
+                year_lost_on_streak_total += 1
+                total += 1
+                times_lost_on_win_streak += 1
+            elif team_dict["Win streaks"][i] == strk and team_dict["Win streaks"][i+1] == str(int(strk) + 1):
+                year_total += 1
+
+                total += 1
+                times_won_on_win_streak += 1
+        print(times_lost_on_win_streak, " : ", total)
+
+        if total > 0:
+            pct = times_lost_on_win_streak / total * 100
+
+        if year_total > 0:
+            year_pct = year_lost_on_streak_total / year_total * 100
+
+        team_dict[f"Percentage of losses on a {strk} win streak:"] = pct
+        team_dict_str = str(team_dict)
+
+        folder_name = f'{year}-W{strk}-data'
+        if not os.path.exists(folder_name):
+            # Create the new folder
+            os.makedirs(folder_name)
+            print(f"Folder '{folder_name}' created successfully.")
+        else:
+            print(f"Folder '{folder_name}' already exists.")
+
+        with open(f'{folder_name}/{ticker}-{year}-W{strk}.txt', 'w') as file:
+            file.write(team_dict_str)
+
+        with open(f'{folder_name}/{year}-W{strk}data.txt', 'w') as file:
+            file.write(str(year_pct))
+
+        print(year_total)
+
+
 def main():
 
     test_dict = {'Tampa Bay Rays': 'W1',
@@ -179,6 +271,9 @@ def main():
     print("Current teams on a 3 win streak: ")
     print(current_win_streaks)
     print()
+    print("Current teams on a 2 win streak: ")
+    print(get_current_two_win_streaks(teams_dict))
+    print()
 
     # counts how many teams won and lost on their three streak
     times_lost_on_three_streak = check_if_teams_lost_on_win_streak(previous_win_streaks, teams_dict)
@@ -196,10 +291,21 @@ def main():
     total = int(total_times_won) + int(total_times_lost)
     print(total)
     pct_won = int(total_times_won) / int(total) * 100
+    pct_lost = int(total_times_lost) / int(total) * 100
     print("Total times won on a three streak: " + str(total_times_won))
     print("Total times lost on a three streak: " + str(total_times_lost))
 
-    print(f'Percentage of teams to win after a three win streak: {pct_won}')
+    print(f'Percentage of teams to lose after a three win streak: {pct_lost}%'
+          f' : {total_times_lost} / {total}')
+
+    print()
+    print()
+
+    year = 2021
+
+    # for i in range(year, 2023):
+    #     get_historical_data(str(i), "2")
+    # get_historical_data("2022", "3")
 
 
 main()
