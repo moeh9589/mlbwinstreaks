@@ -222,6 +222,98 @@ def get_historical_data(year, strk):
         print(year_total)
 
 
+def get_historical_data_for_l1_after_l1_after_w3(year):
+    team_tickers = ['ATL', 'MIA', 'NYM', 'PHI', 'WSN', 'MIL', 'PIT', 'CIN', 'CHC', 'STL', 'LAD', 'ARI', 'SFG', 'SDP',
+                    'COL', 'TBR', 'BAL', 'NYY', 'TOR', 'BOS', 'MIN', 'DET', 'CLE', 'CHW', 'KCR', 'TEX', 'HOU', 'LAA',
+                    'SEA', 'OAK']
+    year_total = 0
+    year_pct = 0
+    year_lost_after_l1_after_w3_total = 0
+    year_won_after_l1_after_w3_total = 0
+
+    driver = webdriver.Chrome(ChromeDriverManager().install())
+    options = webdriver.ChromeOptions()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+
+    for ticker in team_tickers:
+        times_lost_after_l1_after_w3 = 0
+        times_won_after_l1_after_w3 = 0
+        total = 0
+        pct = 0
+        strk = "3"
+        url = f'https://www.baseball-reference.com/teams/{ticker}/{year}-schedule-scores.shtml'
+        driver.get(url)
+        soup = BeautifulSoup(driver.page_source, "lxml")
+
+        team_dict = {}
+
+        team_name = ""
+        team_info = soup.find('h1')
+        span_tags = team_info.find_all('span')
+        for span in span_tags:
+            team_name += span.get_text()
+            team_name += " "
+
+        team_dict["Team Name and Year"] = team_name
+        team_dict["Win streaks"] = []
+
+        tds = soup.find_all('td', {'data-stat': 'win_loss_streak'})
+        for td in tds:
+            csk_value = td.get('csk')
+            team_dict["Win streaks"].append(csk_value)
+            print(csk_value)
+
+        for i in range(len(team_dict["Win streaks"]) - 2):
+
+            if team_dict["Win streaks"][i] == strk and team_dict["Win streaks"][i+1] == "-1" \
+                    and team_dict["Win streaks"][i+2] == "1":
+                year_total += 1
+                total += 1
+                times_won_after_l1_after_w3 += 1
+                year_won_after_l1_after_w3_total += 1
+
+            elif team_dict["Win streaks"][i] == strk and team_dict["Win streaks"][i+2] == "-2":
+                year_total += 1
+                total += 1
+                times_lost_after_l1_after_w3 += 1
+                year_lost_after_l1_after_w3_total += 1
+
+        print(times_lost_after_l1_after_w3, " : ", total)
+        print(times_won_after_l1_after_w3, " : ", total)
+
+        if total > 0:
+            pct = times_lost_after_l1_after_w3 / total * 100
+
+        if year_total > 0:
+            year_pct = year_lost_after_l1_after_w3_total / year_total * 100
+
+        team_dict[f"Percentage of losses after losing 1 after a 3 win streak:"] = pct
+        team_dict_str = str(team_dict)
+
+        folder_name = f'{year}-L1-after-L1-after-W3-data'
+        if not os.path.exists(folder_name):
+            # Create the new folder
+            os.makedirs(folder_name)
+            print(f"Folder '{folder_name}' created successfully.")
+        else:
+            print(f"Folder '{folder_name}' already exists.")
+
+        # with open(f'{folder_name}/{ticker}-{year}-W{strk}.txt', 'w') as file:
+        #     file.write(team_dict_str)
+
+        with open(f'{folder_name}/{year}-L1-after-L1-after-W3-data.txt', 'w') as file:
+            file.write(str(year_pct))
+
+        print(year_total)
+
+
+def get_hd_for_mult_years(year1, year2):
+
+    for i in range(year1, year2):
+        get_historical_data_for_l1_after_l1_after_w3(i)
+
+
 def main():
 
     test_dict = {'Tampa Bay Rays': 'W1',
@@ -306,6 +398,8 @@ def main():
     # for i in range(year, 2023):
     #     get_historical_data(str(i), "2")
     # get_historical_data("2022", "3")
+    # get_historical_data_for_l1_after_l1_after_w3(2022)
+    get_hd_for_mult_years(2013, 2023)
 
 
 main()
