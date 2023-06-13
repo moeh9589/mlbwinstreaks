@@ -3,11 +3,15 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 import os
+import re
+import ast
 
 
 def retrieve_info_from_mlb_dot_com():
-    driver = webdriver.Chrome(ChromeDriverManager().install())
+    driver_service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=driver_service)
 
     options = webdriver.ChromeOptions()
     options.add_argument('--ignore-certificate-errors')
@@ -140,21 +144,145 @@ def get_times_won_and_lost_from_file():
     return [old_times_won, old_times_lost]
 
 
-def get_historical_data(year, strk):
-    team_tickers = ['ATL', 'MIA', 'NYM', 'PHI', 'WSN', 'MIL', 'PIT', 'CIN', 'CHC', 'STL', 'LAD', 'ARI', 'SFG', 'SDP',
-                    'COL', 'TBR', 'BAL', 'NYY', 'TOR', 'BOS', 'MIN', 'DET', 'CLE', 'CHW', 'KCR', 'TEX', 'HOU', 'LAA',
-                    'SEA', 'OAK']
-    year_total = 0
-    year_pct = 0
-    year_lost_on_streak_total = 0
+def get_historical_betting_data(year):
+    driver_service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=driver_service)
+    # driver.implicitly_wait(10)
 
-    driver = webdriver.Chrome(ChromeDriverManager().install())
+    options = webdriver.ChromeOptions()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+    team_names = [
+        'arizona-diamondbacks',
+        'atlanta-braves',
+        'baltimore-orioles',
+        'boston-red-sox',
+        'chicago-cubs',
+        'chicago-white-sox',
+        'cincinnati-reds',
+        'cleveland-guardians',
+        'colorado-rockies',
+        'detroit-tigers',
+        'houston-astros',
+        'kansas-city-royals',
+        'los-angeles-angels',
+        'los-angeles-dodgers',
+        'miami-marlins',
+        'milwaukee-brewers',
+        'minnesota-twins',
+        'new-york-yankees',
+        'new-york-mets',
+        'oakland-athletics',
+        'philadelphia-phillies',
+        'pittsburgh-pirates',
+        'san-diego-padres',
+        'san-francisco-giants',
+        'seattle-mariners',
+        'st.-louis-cardinals',
+        'tampa-bay-rays',
+        'texas-rangers',
+        'toronto-blue-jays',
+        'washington-nationals'
+    ]
+
+    for i in range(len(team_names)):
+        team_name = team_names[i]
+        moneyline_odds = []
+
+        print(team_name)
+        url = f'https://www.covers.com/sport/baseball/mlb/teams/main/{team_name}/{year}'
+        driver.get(url)
+        soup = BeautifulSoup(driver.page_source, "lxml")
+
+        div_element = soup.find('div', class_="col-xs-12")
+        if div_element:
+            regular_season_h2 = div_element.find('h2', string='Regular Season')
+            if regular_season_h2:
+                td_elements = regular_season_h2.find_next('table').find_all('td')
+                counter = 0
+                for td_element in td_elements:
+                    moneyline_value = re.search(r'[+-]\d{3}', td_element.get_text())
+                    if moneyline_value:
+                        counter += 1
+                        print(str(counter))
+                        print("Moneyline Value:", moneyline_value.group())
+                        moneyline_odds.insert(0, moneyline_value.group())
+                    else:
+                        continue
+
+        else:
+            print("div element with class 'col-xs-12' not found.")
+
+        folder_name = f'{year}-MoneylineOdds-data'
+        if not os.path.exists(folder_name):
+            # Create the new folder
+            os.makedirs(folder_name)
+            print(f"Folder '{folder_name}' created successfully.")
+        else:
+            print(f"Folder '{folder_name}' already exists.")
+
+        with open(f'{folder_name}/{team_names[i]}-{year}-moneylines.txt', 'w') as file:
+            file.write(str(moneyline_odds))
+
+
+def get_historical_data(year, strk):
+    total_profit = 0
+    stake = 100
+    team_tickers = [
+        'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CHW', 'CIN', 'CLE', 'COL', 'DET', 'HOU', 'KCR', 'LAA',
+        'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK', 'PHI', 'PIT', 'SDP', 'SFG', 'SEA', 'STL',
+        'TBR', 'TEX', 'TOR', 'WSN'
+]
+
+    team_names = [
+        'arizona-diamondbacks',
+        'atlanta-braves',
+        'baltimore-orioles',
+        'boston-red-sox',
+        'chicago-cubs',
+        'chicago-white-sox',
+        'cincinnati-reds',
+        'cleveland-guardians',
+        'colorado-rockies',
+        'detroit-tigers',
+        'houston-astros',
+        'kansas-city-royals',
+        'los-angeles-angels',
+        'los-angeles-dodgers',
+        'miami-marlins',
+        'milwaukee-brewers',
+        'minnesota-twins',
+        'new-york-mets',
+        'new-york-yankees',
+        'oakland-athletics',
+        'philadelphia-phillies',
+        'pittsburgh-pirates',
+        'san-diego-padres',
+        'san-francisco-giants',
+        'seattle-mariners',
+        'st.-louis-cardinals',
+        'tampa-bay-rays',
+        'texas-rangers',
+        'toronto-blue-jays',
+        'washington-nationals'
+    ]
+
+    driver_service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=driver_service)
+    # driver.implicitly_wait(10)
 
     options = webdriver.ChromeOptions()
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--ignore-ssl-errors')
 
+    year_total = 0
+    year_pct = 0
+    year_lost_on_streak_total = 0
+    num = 0
+    # goes to baseball reference.com to find all win streak values for each team
     for ticker in team_tickers:
+        team_name = team_names[num]
+        num += 1
         times_lost_on_win_streak = 0
         times_won_on_win_streak = 0
         total = 0
@@ -164,23 +292,14 @@ def get_historical_data(year, strk):
         driver.get(url)
         soup = BeautifulSoup(driver.page_source, "lxml")
 
-        team_dict = {}
-
-        team_name = ""
-        team_info = soup.find('h1')
-        span_tags = team_info.find_all('span')
-        for span in span_tags:
-            team_name += span.get_text()
-            team_name += " "
-
-        team_dict["Team Name and Year"] = team_name
-        team_dict["Win streaks"] = []
+        team_dict = {"Team Name and Year": team_name, "Win streaks": [], f"Odds on W{strk}": [],
+                     "Possible winnings with $100 bet": 0}
 
         tds = soup.find_all('td', {'data-stat': 'win_loss_streak'})
         for td in tds:
             csk_value = td.get('csk')
             team_dict["Win streaks"].append(csk_value)
-            print(csk_value)
+            # print(csk_value, end=', ')
 
         for i in range(len(team_dict["Win streaks"]) - 1):
 
@@ -189,11 +308,36 @@ def get_historical_data(year, strk):
                 year_lost_on_streak_total += 1
                 total += 1
                 times_lost_on_win_streak += 1
+                team_dict["Possible winnings with $100 bet"] -= 100
+                total_profit -= 100
+
             elif team_dict["Win streaks"][i] == strk and team_dict["Win streaks"][i+1] == str(int(strk) + 1):
                 year_total += 1
-
                 total += 1
                 times_won_on_win_streak += 1
+
+                # from the moneylines file: use indexed value to calculate a profit based on $100 stake
+                with open(f'2022-MoneylineOdds-data/{team_name}-{year}-moneylines.txt', 'r') as file:
+                    content = file.read()
+                data_list = ast.literal_eval(content)
+                odds = data_list[i+1]
+                team_dict[f"Odds on W{strk}"].append(odds)
+                if odds.startswith('+'):
+                    odds_int = float(odds[1:])
+                    profit = (float(stake) / 100) * odds_int
+                    # profit = profit * 0.9
+
+                elif odds.startswith('-'):
+                    odds_int = float(odds[1:])
+                    profit = (float(stake) / odds_int) * 100
+                    # profit *= 0.9
+
+                else:
+                    continue
+                    
+                team_dict["Possible winnings with $100 bet"] += profit
+                total_profit += profit
+
         print(times_lost_on_win_streak, " : ", total)
 
         if total > 0:
@@ -218,8 +362,8 @@ def get_historical_data(year, strk):
 
         with open(f'{folder_name}/{year}-W{strk}data.txt', 'w') as file:
             file.write(str(year_pct))
-
-        print(year_total)
+            file.write('\n')
+            file.write(str(total_profit))
 
 
 def get_historical_data_for_l1_after_l1_after_w3(year):
@@ -399,7 +543,8 @@ def main():
     #     get_historical_data(str(i), "2")
     # get_historical_data("2022", "3")
     # get_historical_data_for_l1_after_l1_after_w3(2022)
-    get_hd_for_mult_years(2013, 2023)
+    # get_hd_for_mult_years(2013, 2023)
+    # get_historical_betting_data("2022")
 
 
 main()
